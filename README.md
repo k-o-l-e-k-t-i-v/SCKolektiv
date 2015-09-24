@@ -8,6 +8,11 @@ The addresses are hard-coded (see source) so far, please modify according to IP 
 
 For distant internet connection OpenVPN setup is well advised.
 
+#installation
+
+Put the class into Extensions directory of Supercollider and recompile libraries
+
+
 #initialization 
 
     Kolketiv(\name)
