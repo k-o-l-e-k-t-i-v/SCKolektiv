@@ -44,7 +44,10 @@ Kolektiv {
 
 	*tempo { ^instance.proxy.at(\tempo).clock.tempo*60; }
 
-	*tempo_ {|bpm| instance.proxy.at(\tempo).clock.tempo_(bpm/60); }
+	*tempo_ {|bpm|
+		instance.proxy.at(\tempo).clock.tempo_(bpm/60);
+		instance.events.clockTempo_(bpm);
+	}
 
 	*historySave {
 		var dir = (Kolektiv.filenameSymbol.asString.dirname +/+ "History").standardizePath;
@@ -80,13 +83,16 @@ Kolektiv {
 				Server.internal.options.memSize = serverMemory;
 
 				Server.local.waitForBoot({
+					currentEnvironment.clear.pop;
+					topEnvironment.clear.pop;
 
 					currentEnvironment.isEmpty.if({
-						proxy = ProxySpace.new(Server.local);
+						proxy = ProxySpace.push(Server.local);
 						proxy.makeTempoClock;
 						proxy.clock.tempo_(120/60);
+						topEnvironment.put(\tempo, proxy.at(\tempo));
+						// Environment.push(proxy.envir);
 
-						Environment.push(proxy.envir)
 					});
 
 					net = Dictionary.new;
@@ -179,6 +185,9 @@ Kolektiv {
 		events.clockTimeAnswer = {|event, target, clockTime|
 			net.at(target.asSymbol).sendMsg('/clock/latencyAnswer', name.asSymbol, clockTime);
 		};
+		events.clockTempo_ = {|event, bpm| net.keysValuesDo {|key, target|
+			target.sendMsg('/clock/setTempo/set', name.asSymbol, bpm);
+		}};
 	}
 
 	initReceiveMsg {
@@ -227,6 +236,14 @@ Kolektiv {
 
 		}, '/clock/latencyAnswer', nil).permanent_(true);
 		*/
+		OSCdef.newMatching(\msg_clockTempoSet, {|msg, time, addr, recvPort|
+			var msgType = msg[0];
+			var sender = msg[1];
+			var bpm = msg[2];
+			"Kolektiv tempo change by % to % bpm".format(sender, bpm).warn;
+			proxy.at(\tempo).clock.tempo = bpm/60;
+
+		}, '/clock/setTempo/set', nil).permanent_(true);
 
 		OSCdef.newMatching(\msg_kill, {|msg, time, addr, recvPort|
 			var msgType = msg[0];
