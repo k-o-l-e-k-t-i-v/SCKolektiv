@@ -1,5 +1,5 @@
 Kolektiv {
-	classvar ver = 0.075;
+	classvar ver = 0.76;
 	classvar serverMemory = 5529600;
 	classvar doc;
 	classvar isOpenDoc;
@@ -8,7 +8,7 @@ Kolektiv {
 	var <name, net, group;
 	var <events;
 
-	var <proxyspace, <clock, <tempo;
+	var <proxy;
 	var isMyCmdPeriod = true;
 
 	accounts{
@@ -40,8 +40,11 @@ Kolektiv {
 
 	*version { instance.print; ^ver; }
 
-	*print { instance.isNil.if( { "You arn not log in to Kolektiv session".postln; },{	instance.print; })
-	}
+	*print { instance.isNil.if( { "You arn not log in to Kolektiv session".postln; },{	instance.print; })	}
+
+	*tempo { ^instance.proxy.at(\tempo).clock.tempo*60; }
+
+	*tempo_ {|bpm| instance.proxy.at(\tempo).clock.tempo_(bpm/60); }
 
 	*historySave {
 		var dir = (Kolektiv.filenameSymbol.asString.dirname +/+ "History").standardizePath;
@@ -78,9 +81,13 @@ Kolektiv {
 
 				Server.local.waitForBoot({
 
-					// clock = TempoBusClock.new;
-					// clock.permanent = true;
-					// clock.tempo = 120/60;
+					currentEnvironment.isEmpty.if({
+						proxy = ProxySpace.new(Server.local);
+						proxy.makeTempoClock;
+						proxy.clock.tempo_(120/60);
+
+						Environment.push(proxy.envir)
+					});
 
 					net = Dictionary.new;
 					group = Dictionary.new;
@@ -126,10 +133,10 @@ Kolektiv {
 
 		// CHECKPRINT
 		"\nNAME || %".format(name).postln;
-		// "Proxy : %".format(proxyspace).postln;
+		"Proxy : %".format(proxy).postln;
 		// "Clock : %".format(clock).postln;
-		// "Tempo : %".format(clock.tempo).postln;
-		// "Beats : %".format(clock.beats).postln;
+		"Tempo : %".format(proxy.at(\tempo).clock.tempo).postln;
+		"Beats : %".format(proxy.at(\tempo).clock.beats).postln;
 		// events.clockTime(clock.beats);
 		net.keys.do({|key|
 			"Others || name: %, ip : % ".format(key, net.at(key)).postln;
