@@ -89,7 +89,7 @@ Kolektiv {
 						// CmdPeriod.add(profilGroup);
 						profilGroup.isPlaying_(true);
 						profilGroup.isRunning_(true);
-						profilGroup.postln;
+
 						Server.local.sendBundle(nil, profilGroup.newMsg;);
 						group.put(
 							profil.key.asSymbol,
@@ -104,9 +104,6 @@ Kolektiv {
 							);
 						});
 					});
-					// group.do({|key| key.postln; });
-					(group.at(\kof).asString).warn;
-					(group.at(\joach).asString).warn;
 					currentEnvironment.group = group.at(name.asSymbol);
 
 					isOpenDoc = false;
@@ -152,7 +149,7 @@ Kolektiv {
 	}
 
 	cmdPeriod {
-		isMyCmdPeriod.if( { events.cmdPeriod; } , { isMyCmdPeriod = true; "CMD+. free all players synth".warn; } );
+		isMyCmdPeriod.if( { events.cmdPeriod; "CMD+. free all players synth".warn; } , { isMyCmdPeriod = true; } );
 	}
 
 	clean {
@@ -298,10 +295,13 @@ Kolektiv {
 				code = this.blockCode(code);
 				// this.putNodeToGroup;
 				// currentEnvironment.group = profilGroup.nodeID;
+				currentEnvironment.group = group.at(sender.asSymbol);//.nodeID.asString;
 
 				"\n\nCodeExecute from %\n%".format(sender,  code).postln;
 				thisProcess.interpreter.interpret(code.asString);
 				History.enter(code.asString, sender.asSymbol);
+
+				currentEnvironment.group = group.at(name.asSymbol);
 			};
 		}, '/code/execute', nil).permanent_(true);
 	}
@@ -333,13 +333,6 @@ Kolektiv {
 		History.start;
 		History.forwardFunc = { |code|
 			(name.asSymbol != \listener).if({
-				(group.at(name.asSymbol).asString).warn;
-				(group.at(name.asSymbol).asGroup).postln;
-				(group.at(name.asSymbol).nodeID).postcs;
-				currentEnvironment.group = group.at(name.asSymbol);//.nodeID.asString;
-				"g - %".format(currentEnvironment.group).postln;
-				// group.at(\joach).postln;
-				// (group.at(name.asSymbol).asString).warn;
 				History.enter(code.asString, name.asSymbol);
 				events.execute(code.asString);
 			},{
