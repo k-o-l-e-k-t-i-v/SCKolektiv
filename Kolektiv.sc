@@ -84,15 +84,19 @@ Kolektiv {
 					// thisProcess.openUDPPort(8080);
 
 					this.accounts.do({ |profil|
+						var id = profil.value.asString.replace(".","");
+						var profilGroup = Group.basicNew(Server.local, id.asInteger);
+						// CmdPeriod.add(profilGroup);
+						profilGroup.isPlaying_(true);
+						profilGroup.isRunning_(true);
+						profilGroup.postln;
+						Server.local.sendBundle(nil, profilGroup.newMsg;);
+						group.put(
+							profil.key.asSymbol,
+							profilGroup.asGroup
+						);
+
 						(name.asString != profil.key.asString).if({
-
-							var id = profil.value.asString.replace(".","");
-							var profilGroup = Group.basicNew(Server.local, id.asInteger);
-							group.put(
-								profil.key.asSymbol,
-								Server.local.sendBundle(nil, profilGroup.newMsg;);
-							);
-
 							net.put(
 								profil.key.asSymbol,
 								NetAddr(profil.value.asString, NetAddr.langPort)
@@ -100,6 +104,10 @@ Kolektiv {
 							);
 						});
 					});
+					// group.do({|key| key.postln; });
+					(group.at(\kof).asString).warn;
+					(group.at(\joach).asString).warn;
+					currentEnvironment.group = group.at(name.asSymbol);
 
 					isOpenDoc = false;
 
@@ -125,6 +133,7 @@ Kolektiv {
 		proxy = ProxySpace.new(Server.local);
 		proxy.makeTempoClock;
 		proxy.clock.tempo_(120/60);
+
 		proxy.push(currentEnvironment);
 	}
 
@@ -288,6 +297,8 @@ Kolektiv {
 			{
 				code = this.blockCode(code);
 				// this.putNodeToGroup;
+				// currentEnvironment.group = profilGroup.nodeID;
+
 				"\n\nCodeExecute from %\n%".format(sender,  code).postln;
 				thisProcess.interpreter.interpret(code.asString);
 				History.enter(code.asString, sender.asSymbol);
@@ -322,6 +333,13 @@ Kolektiv {
 		History.start;
 		History.forwardFunc = { |code|
 			(name.asSymbol != \listener).if({
+				(group.at(name.asSymbol).asString).warn;
+				(group.at(name.asSymbol).asGroup).postln;
+				(group.at(name.asSymbol).nodeID).postcs;
+				currentEnvironment.group = group.at(name.asSymbol);//.nodeID.asString;
+				"g - %".format(currentEnvironment.group).postln;
+				// group.at(\joach).postln;
+				// (group.at(name.asSymbol).asString).warn;
 				History.enter(code.asString, name.asSymbol);
 				events.execute(code.asString);
 			},{
