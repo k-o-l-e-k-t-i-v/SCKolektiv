@@ -8,36 +8,52 @@ Running connected OpenVPN is well advised, but the class should work on any loca
 
 CLASSMETHODS::
 
-METHOD:: new
-Create new Kolektiv object with your name
+subsection::Working with session
 
-ARGUMENT:: userName
+METHOD:: new
+Create new Kolektiv instnace with your name account. Prepare proxyspace, groups and ~tempo.kr (TempoBusClock).
+
+ARGUMENT:: name
 Your name (Symbol)
 
-METHOD:: connect
-This method is for calling a direct connection between specified clients.
+code::
+Kolektiv(\kof);
+Kolektiv(\joach);
+Kolektiv(\alex);
+::
 
-ARGUMENT:: ip
-Strings, representing IP address of target player on the network (String)
+METHOD:: free
+Exit from Kolektiv instnace.
 
-METHOD:: document
-New document for divide writting of code
+METHOD:: players
+Inforamtion about connected players
 
-METHOD:: sharedDocument
-New document for shared writting of code
+METHOD:: tempo
+BPM of ~tempo clocks.
+
+ARGUMENT:: bpm
+Set new BPM for all Kolektiv players ~tempo clocks(Integer)
 
 METHOD:: print
-Inforamtion about connected players
+Inforamtion about proxy, clocks and open OSCdef.
+
+subsection::Working with history
+
+METHOD:: historySave
+Save current history.
+
+METHOD:: historyReplay
+Replay selected history.
 
 EXAMPLES::
 
 code::
-Kolektiv(\joach);
+Kolektiv(\tester)
+Kolektiv.players
+Kolektiv.tempo
+Kolektiv.tempo_(160)
+Kolektiv.print
+Kolektiv.free
 
-Kolektiv.connect("10.8.0.14");
-Kolektiv.connect("10.8.0.6");
-Kolektiv.print;
-
-Kolektiv.document;
-Kolektiv.sharedDocument;
+Kolektiv.historyReplay
 ::
