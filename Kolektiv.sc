@@ -8,7 +8,6 @@ Kolektiv {
 	var <name, net, group;
 	var <events;
 
-	var <>proxy;
 	var isMyCmdPeriod = true;
 
 	accounts{
@@ -27,12 +26,8 @@ Kolektiv {
 			"You arn not log in to Kolektiv session".postln;
 		},{
 			"You leaving Kolektiv session".format(name).warn;
-			CmdPeriod.remove(instance);
-			instance.events.notNil.if({ instance.events.exit; });
-			OSCdef.freeAll;
-			History.end;
-			History.clear;
-			instance = nil;
+			instance.events.exit;
+			instance.clean;
 		})
 	}
 
@@ -40,9 +35,9 @@ Kolektiv {
 
 	*version { instance.print; ^ver; }
 
-	*print { instance.isNil.if( { "You arn not log in to Kolektiv session".postln; },{	instance.print; })	}
+	*print { instance.isNil.if( { "You are not log in to Kolektiv session".postln; },{	instance.print; })	}
 
-	*tempo { ^"Current tempo is % bpm".format(instance.proxy.at(\tempo).clock.tempo*60); }
+	*tempo { ^"Current tempo is % bpm".format(currentEnvironment[\tempo].clock.tempo*60); }
 
 	*tempo_ {|bpm|
 		currentEnvironment[\tempo].clock.tempo_(bpm/60);
@@ -57,24 +52,11 @@ Kolektiv {
 	}
 
 	*historyReplay {
-		instance.notNil.if({
-			(instance.name == \listener).if ({
-				instance = nil;
-			}, {
-				"Exist running instance of Kolektiv(%). Use at first .free to exit".format(instance.name).warn;
-			})
-		});
-
-		instance.isNil.if({
+		File.openDialog (nil, { |path|
+			instance.notNil.if({ instance.clean; });
 			Kolektiv(\listener);
-			// Server.local.options.memSize = serverMemory;
-			// Server.internal.options.memSize = serverMemory;
 			Server.local.waitForBoot({
-				File.openDialog (nil, { |path|
-					History.clear.loadCS(path).play;
-					"Now running instance of Kolektiv(\\listener)".warn;
-				});
-
+				History.clear.loadCS(path).play;
 			});
 		});
 	}
@@ -90,11 +72,10 @@ Kolektiv {
 				"Kolektiv not booting on port 57120 [current boot port %]".format(NetAddr.langPort).warn;
 				instance = nil;
 			}, {
-				"Kolektiv shared document [ver %]".format(ver).postln;
+				"Kolektiv(%) instance is running now [ver %]".format(name, ver).warn;
 
 				Server.local.options.memSize = serverMemory;
 				Server.internal.options.memSize = serverMemory;
-
 				Server.local.waitForBoot({
 
 					net = Dictionary.new;
@@ -125,7 +106,7 @@ Kolektiv {
 					this.initHistory;
 					this.initReceiveMsg;
 					this.initSendMsg;
-					History.enter("Kolektiv.tempo_(120);", name.asSymbol);
+
 					events.join;
 					// events.clockTime(clock.beats);
 					// ShutDown.add({ this.free; });
@@ -133,28 +114,27 @@ Kolektiv {
 				);
 			});
 		}, {
-			"Exist running instance of Kolektiv(%). Use at first .free to exit".format(instance.name).warn;
+			this.clean;
+			Kolektiv(name);
 		});
 	}
 
 	makeProxy{
+		var proxy;
 		currentEnvironment.clear.pop;
-
 		proxy = ProxySpace.new(Server.local);
 		proxy.makeTempoClock;
 		proxy.clock.tempo_(120/60);
 		proxy.push(currentEnvironment);
-		// ^proxy;
 	}
 
 	print {
 
 		// CHECKPRINT
 		"\nNAME || %".format(name).postln;
-		"Proxy : %".format(proxy).postln;
-		// "Clock : %".format(clock).postln;
-		"Tempo : %".format(proxy.at(\tempo).clock.tempo).postln;
-		"Beats : %".format(proxy.at(\tempo).clock.beats).postln;
+		"Proxy : %".format(currentEnvironment).postln;
+		"Tempo : %".format(currentEnvironment[\tempo].clock.tempo).postln;
+		"Beats : %".format(currentEnvironment[\tempo].clock.beats).postln;
 		// events.clockTime(clock.beats);
 		net.keys.do({|key|
 			"Others || name: %, ip : % ".format(key, net.at(key)).postln;
@@ -164,6 +144,14 @@ Kolektiv {
 
 	cmdPeriod {
 		isMyCmdPeriod.if( { events.cmdPeriod; } , { isMyCmdPeriod = true; "CMD+. free all players synth".warn; } );
+	}
+
+	clean {
+		CmdPeriod.remove(instance);
+		OSCdef.freeAll;
+		History.end;
+		History.clear;
+		instance = nil;
 	}
 
 	initSendMsg {
@@ -333,9 +321,14 @@ Kolektiv {
 		History.clear;
 		History.start;
 		History.forwardFunc = { |code|
-			History.enter(code.asString, name.asSymbol);
-			events.execute(code.asString);
+			(name.asSymbol != \listener).if({
+				History.enter(code.asString, name.asSymbol);
+				events.execute(code.asString);
+			},{
+				"You are log like Kolektiv(%) now. Log first by another name".format(name).warn;
+			});
 		};
+		(name != \listener).if({ History.enter("Kolektiv.tempo_(120);", name.asSymbol); });
 	}
 
 	initDocument { |isShared|
