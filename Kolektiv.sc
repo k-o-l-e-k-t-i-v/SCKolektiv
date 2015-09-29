@@ -8,7 +8,7 @@ Kolektiv {
 	var <name, net, group;
 	var <events;
 
-	var <proxy;
+	var <>proxy;
 	var isMyCmdPeriod = true;
 
 	accounts{
@@ -28,7 +28,7 @@ Kolektiv {
 		},{
 			"You leaving Kolektiv session".format(name).warn;
 			CmdPeriod.remove(instance);
-			instance.events.exit;
+			instance.events.notNil.if({ instance.events.exit; });
 			OSCdef.freeAll;
 			History.end;
 			History.clear;
@@ -42,27 +42,40 @@ Kolektiv {
 
 	*print { instance.isNil.if( { "You arn not log in to Kolektiv session".postln; },{	instance.print; })	}
 
-	*tempo { ^instance.proxy.at(\tempo).clock.tempo*60; }
+	*tempo { ^"Current tempo is % bpm".format(instance.proxy.at(\tempo).clock.tempo*60); }
 
 	*tempo_ {|bpm|
-		instance.proxy.at(\tempo).clock.tempo_(bpm/60);
+		currentEnvironment[\tempo].clock.tempo_(bpm/60);
 		instance.events.clockTempo_(bpm);
 	}
 
 	*historySave {
 		var dir = (Kolektiv.filenameSymbol.asString.dirname +/+ "History").standardizePath;
 		var file = "KolektivHistory_%.scd".format(Date.localtime.stamp);
-		var fileTemp = "KolektivHistory_temp.scd";
 		History.end;
 		History.saveCS(dir +/+ file);
-		History.saveCS(dir +/+ fileTemp);
 	}
 
 	*historyReplay {
-		Server.local.options.memSize = serverMemory;
-		Server.internal.options.memSize = serverMemory;
-		Server.local.waitForBoot({
-			File.openDialog (nil, { |path|	History.clear.loadCS(path).play; });
+		instance.notNil.if({
+			(instance.name == \listener).if ({
+				instance = nil;
+			}, {
+				"Exist running instance of Kolektiv(%). Use at first .free to exit".format(instance.name).warn;
+			})
+		});
+
+		instance.isNil.if({
+			Kolektiv(\listener);
+			// Server.local.options.memSize = serverMemory;
+			// Server.internal.options.memSize = serverMemory;
+			Server.local.waitForBoot({
+				File.openDialog (nil, { |path|
+					History.clear.loadCS(path).play;
+					"Now running instance of Kolektiv(\\listener)".warn;
+				});
+
+			});
 		});
 	}
 
@@ -112,7 +125,7 @@ Kolektiv {
 					this.initHistory;
 					this.initReceiveMsg;
 					this.initSendMsg;
-
+					History.enter("Kolektiv.tempo_(120);", name.asSymbol);
 					events.join;
 					// events.clockTime(clock.beats);
 					// ShutDown.add({ this.free; });
@@ -131,6 +144,7 @@ Kolektiv {
 		proxy.makeTempoClock;
 		proxy.clock.tempo_(120/60);
 		proxy.push(currentEnvironment);
+		// ^proxy;
 	}
 
 	print {
@@ -239,7 +253,8 @@ Kolektiv {
 			var sender = msg[1];
 			var bpm = msg[2];
 			"Kolektiv tempo change by % to % bpm".format(sender, bpm).warn;
-			proxy.at(\tempo).clock.tempo = bpm/60;
+			// proxy.at(\tempo).clock.tempo = bpm/60;
+			currentEnvironment[\tempo].clock.tempo_(bpm/60);
 
 		}, '/clock/setTempo/set', nil).permanent_(true);
 
