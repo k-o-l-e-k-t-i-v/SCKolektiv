@@ -20,7 +20,7 @@ Kolektiv {
 		];
 	}
 
-	*new{ |name| ^super.newCopyArgs(name).init; }
+	*new{ |name| ^super.newCopyArgs(name).makeProxy.init; }
 
 	*free {
 		instance.isNil.if({
@@ -83,17 +83,6 @@ Kolektiv {
 				Server.internal.options.memSize = serverMemory;
 
 				Server.local.waitForBoot({
-					currentEnvironment.clear.pop;
-					topEnvironment.clear.pop;
-
-					currentEnvironment.isEmpty.if({
-						proxy = ProxySpace.push(Server.local);
-						proxy.makeTempoClock;
-						proxy.clock.tempo_(120/60);
-						topEnvironment.put(\tempo, proxy.at(\tempo));
-						// Environment.push(proxy.envir);
-
-					});
 
 					net = Dictionary.new;
 					group = Dictionary.new;
@@ -133,6 +122,15 @@ Kolektiv {
 		}, {
 			"Exist running instance of Kolektiv(%). Use at first .free to exit".format(instance.name).warn;
 		});
+	}
+
+	makeProxy{
+		currentEnvironment.clear.pop;
+
+		proxy = ProxySpace.new(Server.local);
+		proxy.makeTempoClock;
+		proxy.clock.tempo_(120/60);
+		proxy.push(currentEnvironment);
 	}
 
 	print {
