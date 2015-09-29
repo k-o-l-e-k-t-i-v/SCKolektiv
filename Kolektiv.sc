@@ -23,7 +23,7 @@ Kolektiv {
 
 	*free {
 		instance.isNil.if({
-			"You arn not log in to Kolektiv session".postln;
+			"You are not log into Kolektiv session".postln;
 		},{
 			"You leaving Kolektiv session".format(name).warn;
 			instance.events.exit;
@@ -31,17 +31,25 @@ Kolektiv {
 		})
 	}
 
-	*players { instance.events.join; }
+	*players { instance.notNil.if( { instance.events.aliveTask; },{ "You are not log into Kolektiv session".postln; }) }
 
-	*version { instance.print; ^ver; }
+	*version { ^ver; }
 
-	*print { instance.isNil.if( { "You are not log in to Kolektiv session".postln; },{	instance.print; })	}
+	*print { instance.notNil.if( { instance.print; },{ "You are not log into Kolektiv session".postln; })	}
 
-	*tempo { ^"Current tempo is % bpm".format(currentEnvironment[\tempo].clock.tempo*60); }
+	*tempo {
+		instance.notNil.if( {
+			^"Current tempo is % bpm".format(currentEnvironment[\tempo].clock.tempo*60);
+		}, {
+			"You are not log into Kolektiv session".postln;
+		});
+	}
 
 	*tempo_ {|bpm|
-		currentEnvironment[\tempo].clock.tempo_(bpm/60);
-		instance.events.clockTempo_(bpm);
+		instance.notNil.if( {
+			currentEnvironment[\tempo].clock.tempo_(bpm/60);
+			instance.events.clockTempoSet(bpm);
+		});
 	}
 
 	*historySave {
@@ -61,7 +69,7 @@ Kolektiv {
 		});
 	}
 
-	*historyRestart { History.end.clear.start; }
+	// *historyRestart { History.end.clear.start; }
 
 	init {
 		instance.isNil.if({
@@ -135,13 +143,13 @@ Kolektiv {
 	}
 
 	print {
-
 		// CHECKPRINT
 		"\nNAME || %".format(name).postln;
 		"Proxy : %".format(currentEnvironment).postln;
 		"Tempo : %".format(currentEnvironment[\tempo].clock.tempo).postln;
 		"Beats : %".format(currentEnvironment[\tempo].clock.beats).postln;
 		// events.clockTime(clock.beats);
+		Server.local.queryAllNodes;
 		net.keys.do({|key|
 			"Others || name: %, ip : % ".format(key, net.at(key)).postln;
 		});
@@ -166,8 +174,11 @@ Kolektiv {
 		events.join = {|event| net.keysValuesDo {|key, target|
 			target.sendMsg('/user/join', name.asSymbol);
 		}};
-		events.alive = {|event, target, clockTime|
-			net.at(target.asSymbol).sendMsg('/user/alive', name.asSymbol, clockTime);
+		events.aliveTask = {|event| net.keysValuesDo {|key, target|
+			target.sendMsg('/user/alive/task', name.asSymbol);
+		}};
+		events.aliveAnsw = {|event, target|
+			net.at(target.asSymbol).sendMsg('/user/alive/answ', name.asSymbol);
 		};
 		events.exit = {|event| net.keysValuesDo {|key, target|
 			target.sendMsg('/user/exit', name.asSymbol);
@@ -191,7 +202,7 @@ Kolektiv {
 		events.clockTimeAnswer = {|event, target, clockTime|
 			net.at(target.asSymbol).sendMsg('/clock/latencyAnswer', name.asSymbol, clockTime);
 		};
-		events.clockTempo_ = {|event, bpm| net.keysValuesDo {|key, target|
+		events.clockTempoSet = {|event, bpm| net.keysValuesDo {|key, target|
 			target.sendMsg('/clock/setTempo/set', name.asSymbol, bpm);
 		}};
 	}
@@ -202,20 +213,25 @@ Kolektiv {
 			var msgType = msg[0];
 			var sender = msg[1];
 			"Player % has joined to session".format(sender).warn;
-
-			events.alive(sender.asSymbol);
-			// events.alive(sender.asSymbol, clock.beats);
+			events.aliveAnsw(sender.asSymbol);
+			events.clockTempoSet(currentEnvironment[\tempo].clock.tempo*60);
 
 		}, '/user/join', nil).permanent_(true);
 
-		OSCdef.newMatching(\msg_alive, {|msg, time, addr, recvPort|
+		OSCdef.newMatching(\msg_alive_task, {|msg, time, addr, recvPort|
 			var msgType = msg[0];
 			var sender = msg[1];
-			// var senderClock = msg[2];
-			"Player % is also prepared".format(sender).warn;
-			// clock.beats_(senderClock);
 
-		}, '/user/alive', nil).permanent_(true);
+			events.aliveAnsw(sender.asSymbol);
+
+		}, '/user/alive/task', nil).permanent_(true);
+
+		OSCdef.newMatching(\msg_alive_answ, {|msg, time, addr, recvPort|
+			var msgType = msg[0];
+			var sender = msg[1];
+			"Player % is also prepared".format(sender).warn;
+
+		}, '/user/alive/answ', nil).permanent_(true);
 
 		OSCdef.newMatching(\msg_exit, {|msg, time, addr, recvPort|
 			var msgType = msg[0];
@@ -242,13 +258,16 @@ Kolektiv {
 
 		}, '/clock/latencyAnswer', nil).permanent_(true);
 		*/
+
 		OSCdef.newMatching(\msg_clockTempoSet, {|msg, time, addr, recvPort|
 			var msgType = msg[0];
 			var sender = msg[1];
 			var bpm = msg[2];
-			"Kolektiv tempo change by % to % bpm".format(sender, bpm).warn;
-			// proxy.at(\tempo).clock.tempo = bpm/60;
-			currentEnvironment[\tempo].clock.tempo_(bpm/60);
+			(bpm.asInteger != (currentEnvironment[\tempo].clock.tempo*60).asInteger).if({
+				"Kolektiv tempo change by % to % bpm".format(sender, bpm).warn;
+				currentEnvironment[\tempo].clock.tempo_(bpm/60);
+				History.enter("Kolektiv.tempo_(%);".format(bpm.asInteger), name.asSymbol);
+			});
 
 		}, '/clock/setTempo/set', nil).permanent_(true);
 
@@ -293,9 +312,8 @@ Kolektiv {
 			if(code.asString.find("Kolektiv").isNil)
 			{
 				code = this.blockCode(code);
-				// this.putNodeToGroup;
-				// currentEnvironment.group = profilGroup.nodeID;
-				currentEnvironment.group = group.at(sender.asSymbol);//.nodeID.asString;
+
+				currentEnvironment.group = group.at(sender.asSymbol);
 
 				"\n\nCodeExecute from %\n%".format(sender,  code).postln;
 				thisProcess.interpreter.interpret(code.asString);
@@ -304,9 +322,6 @@ Kolektiv {
 				currentEnvironment.group = group.at(name.asSymbol);
 			};
 		}, '/code/execute', nil).permanent_(true);
-	}
-	putNodeToGroup{
-		Server.local.nextNodeID.postln;
 	}
 
 	blockCode {|code|
