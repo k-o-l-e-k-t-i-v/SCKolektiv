@@ -19,16 +19,18 @@ Kolektiv {
 		];
 	}
 
-	*new{ |name| ^super.newCopyArgs(name).makeProxy.init; }
+	*new{ |name| ^super.newCopyArgs(name).makeProxy(120).init; }
 
 	*free {
-		instance.isNil.if({
-			"You are not log into Kolektiv session".postln;
-		},{
-			"You leaving Kolektiv session".format(name).warn;
-			instance.events.exit;
-			instance.clean;
-		})
+		instance.isNil.if(
+			{
+				"You are not log into Kolektiv session".postln;
+			},{
+				"You leaving Kolektiv session".format(name).warn;
+				instance.events.exit;
+				instance.clean;
+			}
+		)
 	}
 
 	*players { instance.notNil.if( { instance.events.aliveTask; },{ "You are not log into Kolektiv session".postln; }) }
@@ -38,11 +40,10 @@ Kolektiv {
 	*print { instance.notNil.if( { instance.print; },{ "You are not log into Kolektiv session".postln; })	}
 
 	*tempo {
-		instance.notNil.if( {
-			^"Current tempo is % bpm".format(currentEnvironment[\tempo].clock.tempo*60);
-		}, {
-			"You are not log into Kolektiv session".postln;
-		});
+		instance.notNil.if(
+			{ ^"Current tempo is % bpm".format(currentEnvironment[\tempo].clock.tempo*60); },
+			{ "You are not log into Kolektiv session".postln; }
+		);
 	}
 
 	*tempo_ {|bpm|
@@ -53,23 +54,57 @@ Kolektiv {
 	}
 
 	*historySave {
-		var dir = (Kolektiv.filenameSymbol.asString.dirname +/+ "History").standardizePath;
-		var file = "KolektivHistory_%.scd".format(Date.localtime.stamp);
-		History.end;
-		History.saveCS(dir +/+ file);
-	}
-
-	*historyReplay {
-		File.openDialog (nil, { |path|
-			instance.notNil.if({ instance.clean; });
-			Kolektiv(\listener);
-			Server.local.waitForBoot({
-				History.clear.loadCS(path).play;
-			});
+		(instance.name.asSymbol != \listener).if({
+			File.saveDialog (nil, nil,	{|selectedPath|
+				var dir;
+				var path = selectedPath.dirname.standardizePath;
+				var file = "%_%".format(Date.localtime.dayStamp,selectedPath.basename);
+				var isFile = PathName.new(selectedPath).isFile;
+				var folderFiles = PathName.new(selectedPath.dirname.standardizePath).files;
+				var index = 1;
+				isFile.if(
+					{ dir = selectedPath; },
+					{
+						folderFiles.do({|oneFile|
+							var fileNameNoExtNoNum = PathName(oneFile.fileNameWithoutExtension).noEndNumbers;
+							((fileNameNoExtNoNum == file) or: (fileNameNoExtNoNum == ("%_".format(file)))).if({	index = index + 1; })
+						});
+						(index == 1).if(
+							{ dir = (path.dirname +/+ "%.%".format(file, "scd")).asString.standardizePath; },
+							{ dir = (path.dirname +/+ "%_%.%".format(file, index, "scd")).asString.standardizePath;	}
+						);
+					}
+				);
+				History.saveCS(dir);
+				PathName.tmp = path;
+				// openOS(path);
+			},nil)
 		});
 	}
 
-	// *historyRestart { History.end.clear.start; }
+	*historyReplay {
+		History.end;
+
+		File.openDialog (nil, { |path|
+			instance.notNil.if({
+				instance.makeProxy(120);
+				instance.clean;
+			});
+			Routine({
+				Kolektiv(\listener);
+				5.wait;
+				History.clear.loadCS(path).play;
+			}).play;
+		});
+	}
+
+	*historyRestart {
+		(instance.name.asSymbol != \listener).if({
+			instance.makeProxy(currentEnvironment[\tempo].clock.tempo*60);
+			History.end.clear.start;
+			History.enter("Kolektiv.tempo_(%);".format(currentEnvironment[\tempo].clock.tempo*60), name.asSymbol);
+		});
+	}
 
 	init {
 		instance.isNil.if({
@@ -87,23 +122,9 @@ Kolektiv {
 				Server.local.waitForBoot({
 
 					net = Dictionary.new;
-					group = Dictionary.new;
-
 					// thisProcess.openUDPPort(8080);
 
 					this.accounts.do({ |profil|
-						var id = profil.value.asString.replace(".","");
-						var profilGroup = Group.basicNew(Server.local, id.asInteger);
-						// CmdPeriod.add(profilGroup);
-						profilGroup.isPlaying_(true);
-						profilGroup.isRunning_(true);
-
-						Server.local.sendBundle(nil, profilGroup.newMsg;);
-						group.put(
-							profil.key.asSymbol,
-							profilGroup.asGroup
-						);
-
 						(name.asString != profil.key.asString).if({
 							net.put(
 								profil.key.asSymbol,
@@ -112,7 +133,6 @@ Kolektiv {
 							);
 						});
 					});
-					currentEnvironment.group = group.at(name.asSymbol);
 
 					isOpenDoc = false;
 
@@ -132,12 +152,12 @@ Kolektiv {
 		});
 	}
 
-	makeProxy{
+	makeProxy{|newTempo|
 		var proxy;
 		currentEnvironment.clear.pop;
 		proxy = ProxySpace.new(Server.local);
 		proxy.makeTempoClock;
-		proxy.clock.tempo_(120/60);
+		proxy.clock.tempo_(newTempo/60);
 
 		proxy.push(currentEnvironment);
 	}
@@ -148,8 +168,6 @@ Kolektiv {
 		"Proxy : %".format(currentEnvironment).postln;
 		"Tempo : %".format(currentEnvironment[\tempo].clock.tempo).postln;
 		"Beats : %".format(currentEnvironment[\tempo].clock.beats).postln;
-		// events.clockTime(clock.beats);
-		Server.local.queryAllNodes;
 		net.keys.do({|key|
 			"Others || name: %, ip : % ".format(key, net.at(key)).postln;
 		});
@@ -157,7 +175,10 @@ Kolektiv {
 	}
 
 	cmdPeriod {
-		isMyCmdPeriod.if( { events.cmdPeriod; "CMD+. free all players synth".warn; } , { isMyCmdPeriod = true; } );
+		isMyCmdPeriod.if(
+			{ events.cmdPeriod; "CMD+. free all players synth".warn; },
+			{ isMyCmdPeriod = true; }
+		);
 	}
 
 	clean {
@@ -196,12 +217,6 @@ Kolektiv {
 		}};
 
 
-		events.clockTime = {|event, clockTime| net.keysValuesDo {|key, target|
-			target.sendMsg('/clock/latency', name.asSymbol, clockTime);
-		}};
-		events.clockTimeAnswer = {|event, target, clockTime|
-			net.at(target.asSymbol).sendMsg('/clock/latencyAnswer', name.asSymbol, clockTime);
-		};
 		events.clockTempoSet = {|event, bpm| net.keysValuesDo {|key, target|
 			target.sendMsg('/clock/setTempo/set', name.asSymbol, bpm);
 		}};
@@ -239,25 +254,6 @@ Kolektiv {
 			"Player % exit session".format(sender).warn;
 
 		}, '/user/exit', nil).permanent_(true);
-
-		/*
-		OSCdef.newMatching(\msg_clockLatency, {|msg, time, addr, recvPort|
-		var msgType = msg[0];
-		var sender = msg[1];
-		var senderClock = msg[2].asFloat;
-		"Player % check letency [%]".format(sender, (clock.beats.asFloat - senderClock)).postln;
-
-		events.clockTimeAnswer(sender, clock.beats);
-		}, '/clock/latency', nil).permanent_(true);
-
-		OSCdef.newMatching(\msg_clockLatencyAnswer, {|msg, time, addr, recvPort|
-		var msgType = msg[0];
-		var sender = msg[1];
-		var senderClock = msg[2].asFloat;
-		"Answer on latency check from % : %".format(sender, (clock.beats.asFloat - senderClock)).postln;
-
-		}, '/clock/latencyAnswer', nil).permanent_(true);
-		*/
 
 		OSCdef.newMatching(\msg_clockTempoSet, {|msg, time, addr, recvPort|
 			var msgType = msg[0];
@@ -313,13 +309,9 @@ Kolektiv {
 			{
 				code = this.blockCode(code);
 
-				currentEnvironment.group = group.at(sender.asSymbol);
-
 				"\n\nCodeExecute from %\n%".format(sender,  code).postln;
 				thisProcess.interpreter.interpret(code.asString);
 				History.enter(code.asString, sender.asSymbol);
-
-				currentEnvironment.group = group.at(name.asSymbol);
 			};
 		}, '/code/execute', nil).permanent_(true);
 	}

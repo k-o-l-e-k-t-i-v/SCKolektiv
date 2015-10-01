@@ -45,6 +45,9 @@ Save current history.
 METHOD:: historyReplay
 Replay selected history.
 
+METHOD:: historyRestart
+Restart current record of history.
+
 EXAMPLES::
 
 code::
@@ -55,5 +58,7 @@ Kolektiv.tempo_(160)
 Kolektiv.print
 Kolektiv.free
 
+Kolektiv.historyRestart
+Kolektiv.historySave
 Kolektiv.historyReplay
 ::
