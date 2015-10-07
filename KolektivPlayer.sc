@@ -5,12 +5,33 @@ HistoryPlayer{
 	var texts;
 
 	var currentHistory, pathHistory;
+	var startTime, endTime;
 
 	*new {
 		^super.new.initPlayer();
 	}
 	*close{
 		"konec".postln;
+	}
+
+	lineTime {|lineMsg|
+		currentHistory.notNil.if({
+			"tady : %".format(lineMsg).postln;
+			^lineMsg[0];
+			// ^currentHistory.lines.at(index)[0];
+		});
+	}
+	linePlayer {|lineMsg|
+		currentHistory.notNil.if({
+			^lineMsg[1];
+			// ^currentHistory.lines.at(index)[1];
+		});
+	}
+	lineCode {|lineMsg|
+		currentHistory.notNil.if({
+			^lineMsg[2];
+			// ^currentHistory.lines.at(index)[2];
+		});
 	}
 
 	initPlayer{
@@ -50,9 +71,9 @@ HistoryPlayer{
 			timeView = UserView(win, Rect( 10, (win.bounds.height - 220), (win.bounds.width - 20), 30))
 			.background_(colBack)
 			.drawFunc = {
-			Pen.strokeColor = colFront;
-			Pen.addRect(Rect(0,0, timeView.bounds.width, timeView.bounds.height));
-			Pen.stroke;
+				Pen.strokeColor = colFront;
+				Pen.addRect(Rect(0,0, timeView.bounds.width, timeView.bounds.height));
+				Pen.stroke;
 			};
 
 			historyView = UserView(win, Rect( 10, (win.bounds.height - 180), (win.bounds.width - 20), 110))
@@ -81,6 +102,18 @@ HistoryPlayer{
 
 			texts.put(\historyLinesCount, StaticText( historyView, Rect( 10, 30, (historyView.bounds.width - 20), 20))
 				.string_("lines : nil")
+				.font_(fontBig)
+				.stringColor_(colFront)
+			);
+
+			texts.put(\historyStartTime, StaticText( historyView, Rect( 10, 50, (historyView.bounds.width - 20), 20))
+				.string_("StartTime : nil")
+				.font_(fontBig)
+				.stringColor_(colFront)
+			);
+
+			texts.put(\historyEndTime, StaticText( historyView, Rect( 10, 70, (historyView.bounds.width - 20), 20))
+				.string_("EndTime : nil")
 				.font_(fontBig)
 				.stringColor_(colFront)
 			);
@@ -148,12 +181,30 @@ HistoryPlayer{
 							pathHistory = path;
 							currentHistory = History.clear.loadCS(path);
 							buttons.do({|colection| colection.value = 0;});
+
+							currentHistory.lines[0].postln;
+							endTime = this.lineTime(currentHistory.lines[0]);
+							endTime.asString.warn;
+							startTime = this.lineTime(currentHistory.lines[currentHistory.lines.size-1]);
+							startTime.asString.warn;
+
 							texts.at(\historyPath).string_("openPath : %".format(pathHistory));
 							texts.at(\historyLinesCount).string_("lines : %".format(currentHistory.lines.size));
-							currentHistory.lines[10].postln;
+							texts.at(\historyStartTime).string_("StartTime : %".format(startTime));
+							// texts.at(\historyEndTime).string_(endTime.asTimeString);
+							texts.at(\historyEndTime).string_("EndTime : %".format(endTime));
+
+							/*
+							currentHistory.lines.do({|oneMsg, i|
+							// var
+							i.postln;
+							this.lineTime(i).postln;
+							});
+							*/
+
 							texts.at(\codeLine).string_(currentHistory.lines[150].asString);
 							AppClock.sched(0.05, {butt.value = 0};);
-							"this.open : %;".format(pathHistory).postln;
+							// "this.open : %;".format(pathHistory).postln;
 							activeButton = \open;
 						}, {
 							butt.value = 0;
