@@ -88,10 +88,10 @@ Kolektiv {
 		File.openDialog (nil, { |path|
 			instance.notNil.if({
 				instance.makeProxy(120);
-				instance.clean;
 			});
 			Routine({
 				Kolektiv(\listener);
+				instance.clean;
 				5.wait;
 				History.clear.loadCS(path).play;
 			}).play;
@@ -186,6 +186,7 @@ Kolektiv {
 		OSCdef.freeAll;
 		History.end;
 		History.clear;
+		events = nil;
 		instance = nil;
 	}
 
