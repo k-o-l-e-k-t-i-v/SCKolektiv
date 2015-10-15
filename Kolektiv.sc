@@ -47,8 +47,11 @@ Kolektiv {
 	}
 
 	*tempo_ {|bpm|
-		instance.notNil.if( {
+		currentEnvironment[\tempo].notNil.if({
 			currentEnvironment[\tempo].clock.tempo_(bpm/60);
+		});
+
+		instance.notNil.if({
 			instance.events.clockTempoSet(bpm);
 		});
 	}
@@ -57,7 +60,7 @@ Kolektiv {
 		(instance.name.asSymbol != \listener).if({
 			File.saveDialog (nil, nil,	{|selectedPath|
 				var dir;
-				var path = selectedPath.dirname.standardizePath;
+				var path = (selectedPath.dirname ++ "\/").standardizePath;
 				var file = "%_%".format(Date.localtime.dayStamp,selectedPath.basename);
 				var isFile = PathName.new(selectedPath).isFile;
 				var folderFiles = PathName.new(selectedPath.dirname.standardizePath).files;
