@@ -1,5 +1,5 @@
 Kolektiv {
-	classvar ver = 0.075;
+	classvar ver = 0.76;
 	classvar serverMemory = 5529600;
 	classvar doc;
 	classvar isOpenDoc;
@@ -8,7 +8,6 @@ Kolektiv {
 	var <name, net, group;
 	var <events;
 
-	var <proxyspace, <clock, <tempo;
 	var isMyCmdPeriod = true;
 
 	accounts{
@@ -20,47 +19,95 @@ Kolektiv {
 		];
 	}
 
-	*new{ |name| ^super.newCopyArgs(name).init; }
+	*new{ |name| ^super.newCopyArgs(name).makeProxy(120).init; }
 
 	*free {
-		instance.isNil.if({
-			"You arn not log in to Kolektiv session".postln;
-		},{
-			"You leaving Kolektiv session".format(name).warn;
-			CmdPeriod.remove(instance);
-			instance.events.exit;
-			OSCdef.freeAll;
-			History.end;
-			History.clear;
-			instance = nil;
-		})
+		instance.isNil.if(
+			{
+				"You are not log into Kolektiv session".postln;
+			},{
+				"You leaving Kolektiv session".format(name).warn;
+				instance.events.exit;
+				instance.clean;
+			}
+		)
 	}
 
-	*players { instance.events.join; }
+	*players { instance.notNil.if( { instance.events.aliveTask; },{ "You are not log into Kolektiv session".postln; }) }
 
-	*version { instance.print; ^ver; }
+	*version { ^ver; }
 
-	*print { instance.isNil.if( { "You arn not log in to Kolektiv session".postln; },{	instance.print; })
+	*print { instance.notNil.if( { instance.print; },{ "You are not log into Kolektiv session".postln; })	}
+
+	*tempo {
+		instance.notNil.if(
+			{ ^"Current tempo is % bpm".format(currentEnvironment[\tempo].clock.tempo*60); },
+			{ "You are not log into Kolektiv session".postln; }
+		);
 	}
 
-	*historySave {
-		var dir = (Kolektiv.filenameSymbol.asString.dirname +/+ "History").standardizePath;
-		var file = "KolektivHistory_%.scd".format(Date.localtime.stamp);
-		var fileTemp = "KolektivHistory_temp.scd";
-		History.end;
-		History.saveCS(dir +/+ file);
-		History.saveCS(dir +/+ fileTemp);
-	}
+	*tempo_ {|bpm|
+		currentEnvironment[\tempo].notNil.if({
+			currentEnvironment[\tempo].clock.tempo_(bpm/60);
+		});
 
-	*historyReplay {
-		Server.local.options.memSize = serverMemory;
-		Server.internal.options.memSize = serverMemory;
-		Server.local.waitForBoot({
-			File.openDialog (nil, { |path|	History.clear.loadCS(path).play; });
+		instance.notNil.if({
+			instance.events.clockTempoSet(bpm);
 		});
 	}
 
-	*historyRestart { History.end.clear.start; }
+	*historySave {
+		(instance.name.asSymbol != \listener).if({
+			File.saveDialog (nil, nil,	{|selectedPath|
+				var dir;
+				var path = (selectedPath.dirname ++ "/");
+				var file = "%_%".format(Date.localtime.dayStamp,selectedPath.basename);
+				var isFile = PathName.new(selectedPath).isFile;
+				var folderFiles = PathName.new(selectedPath.dirname.standardizePath).files;
+				var index = 1;
+				isFile.if(
+					{ dir = selectedPath; },
+					{
+						folderFiles.do({|oneFile|
+							var fileNameNoExtNoNum = PathName(oneFile.fileNameWithoutExtension).noEndNumbers;
+							((fileNameNoExtNoNum == file) or: (fileNameNoExtNoNum == ("%_".format(file)))).if({	index = index + 1; })
+						});
+						(index == 1).if(
+							{ dir = (path +/+ "%.%".format(file, "scd")).asString.standardizePath; },
+							{ dir = (path +/+ "%_%.%".format(file, index, "scd")).asString.standardizePath;	}
+						);
+					}
+				);
+				History.saveCS(dir);
+				PathName.tmp = path;
+				// openOS(path);
+			},nil)
+		});
+	}
+
+	*historyReplay {
+		History.end;
+
+		File.openDialog (nil, { |path|
+			instance.notNil.if({
+				instance.makeProxy(120);
+			});
+			Routine({
+				Kolektiv(\listener);
+				instance.clean;
+				5.wait;
+				History.clear.loadCS(path).play;
+			}).play;
+		});
+	}
+
+	*historyRestart {
+		(instance.name.asSymbol != \listener).if({
+			instance.makeProxy(currentEnvironment[\tempo].clock.tempo*60);
+			History.end.clear.start;
+			History.enter("Kolektiv.tempo_(%);".format(currentEnvironment[\tempo].clock.tempo*60), name.asSymbol);
+		});
+	}
 
 	init {
 		instance.isNil.if({
@@ -71,32 +118,17 @@ Kolektiv {
 				"Kolektiv not booting on port 57120 [current boot port %]".format(NetAddr.langPort).warn;
 				instance = nil;
 			}, {
-				"Kolektiv shared document [ver %]".format(ver).postln;
+				"Kolektiv(%) instance is running now [ver %]".format(name, ver).warn;
 
 				Server.local.options.memSize = serverMemory;
 				Server.internal.options.memSize = serverMemory;
-
 				Server.local.waitForBoot({
 
-					// clock = TempoBusClock.new;
-					// clock.permanent = true;
-					// clock.tempo = 120/60;
-
 					net = Dictionary.new;
-					group = Dictionary.new;
-
 					// thisProcess.openUDPPort(8080);
 
 					this.accounts.do({ |profil|
 						(name.asString != profil.key.asString).if({
-
-							var id = profil.value.asString.replace(".","");
-							var profilGroup = Group.basicNew(Server.local, id.asInteger);
-							group.put(
-								profil.key.asSymbol,
-								Server.local.sendBundle(nil, profilGroup.newMsg;);
-							);
-
 							net.put(
 								profil.key.asSymbol,
 								NetAddr(profil.value.asString, NetAddr.langPort)
@@ -118,19 +150,27 @@ Kolektiv {
 				);
 			});
 		}, {
-			"Exist running instance of Kolektiv(%). Use at first .free to exit".format(instance.name).warn;
+			this.clean;
+			Kolektiv(name);
 		});
 	}
 
-	print {
+	makeProxy{|newTempo|
+		var proxy;
+		currentEnvironment.clear.pop;
+		proxy = ProxySpace.new(Server.local);
+		proxy.makeTempoClock;
+		proxy.clock.tempo_(newTempo/60);
 
+		proxy.push(currentEnvironment);
+	}
+
+	print {
 		// CHECKPRINT
 		"\nNAME || %".format(name).postln;
-		// "Proxy : %".format(proxyspace).postln;
-		// "Clock : %".format(clock).postln;
-		// "Tempo : %".format(clock.tempo).postln;
-		// "Beats : %".format(clock.beats).postln;
-		// events.clockTime(clock.beats);
+		"Proxy : %".format(currentEnvironment).postln;
+		"Tempo : %".format(currentEnvironment[\tempo].clock.tempo).postln;
+		"Beats : %".format(currentEnvironment[\tempo].clock.beats).postln;
 		net.keys.do({|key|
 			"Others || name: %, ip : % ".format(key, net.at(key)).postln;
 		});
@@ -138,7 +178,19 @@ Kolektiv {
 	}
 
 	cmdPeriod {
-		isMyCmdPeriod.if( { events.cmdPeriod; } , { isMyCmdPeriod = true; "CMD+. free all players synth".warn; } );
+		isMyCmdPeriod.if(
+			{ events.cmdPeriod; "CMD+. free all players synth".warn; },
+			{ isMyCmdPeriod = true; }
+		);
+	}
+
+	clean {
+		CmdPeriod.remove(instance);
+		OSCdef.freeAll;
+		History.end;
+		History.clear;
+		events = nil;
+		instance = nil;
 	}
 
 	initSendMsg {
@@ -147,8 +199,11 @@ Kolektiv {
 		events.join = {|event| net.keysValuesDo {|key, target|
 			target.sendMsg('/user/join', name.asSymbol);
 		}};
-		events.alive = {|event, target, clockTime|
-			net.at(target.asSymbol).sendMsg('/user/alive', name.asSymbol, clockTime);
+		events.aliveTask = {|event| net.keysValuesDo {|key, target|
+			target.sendMsg('/user/alive/task', name.asSymbol);
+		}};
+		events.aliveAnsw = {|event, target|
+			net.at(target.asSymbol).sendMsg('/user/alive/answ', name.asSymbol);
 		};
 		events.exit = {|event| net.keysValuesDo {|key, target|
 			target.sendMsg('/user/exit', name.asSymbol);
@@ -166,12 +221,9 @@ Kolektiv {
 		}};
 
 
-		events.clockTime = {|event, clockTime| net.keysValuesDo {|key, target|
-			target.sendMsg('/clock/latency', name.asSymbol, clockTime);
+		events.clockTempoSet = {|event, bpm| net.keysValuesDo {|key, target|
+			target.sendMsg('/clock/setTempo/set', name.asSymbol, bpm);
 		}};
-		events.clockTimeAnswer = {|event, target, clockTime|
-			net.at(target.asSymbol).sendMsg('/clock/latencyAnswer', name.asSymbol, clockTime);
-		};
 	}
 
 	initReceiveMsg {
@@ -180,20 +232,25 @@ Kolektiv {
 			var msgType = msg[0];
 			var sender = msg[1];
 			"Player % has joined to session".format(sender).warn;
-
-			events.alive(sender.asSymbol);
-			// events.alive(sender.asSymbol, clock.beats);
+			events.aliveAnsw(sender.asSymbol);
+			events.clockTempoSet(currentEnvironment[\tempo].clock.tempo*60);
 
 		}, '/user/join', nil).permanent_(true);
 
-		OSCdef.newMatching(\msg_alive, {|msg, time, addr, recvPort|
+		OSCdef.newMatching(\msg_alive_task, {|msg, time, addr, recvPort|
 			var msgType = msg[0];
 			var sender = msg[1];
-			// var senderClock = msg[2];
-			"Player % is also prepared".format(sender).warn;
-			// clock.beats_(senderClock);
 
-		}, '/user/alive', nil).permanent_(true);
+			events.aliveAnsw(sender.asSymbol);
+
+		}, '/user/alive/task', nil).permanent_(true);
+
+		OSCdef.newMatching(\msg_alive_answ, {|msg, time, addr, recvPort|
+			var msgType = msg[0];
+			var sender = msg[1];
+			"Player % is also prepared".format(sender).warn;
+
+		}, '/user/alive/answ', nil).permanent_(true);
 
 		OSCdef.newMatching(\msg_exit, {|msg, time, addr, recvPort|
 			var msgType = msg[0];
@@ -202,24 +259,17 @@ Kolektiv {
 
 		}, '/user/exit', nil).permanent_(true);
 
-		/*
-		OSCdef.newMatching(\msg_clockLatency, {|msg, time, addr, recvPort|
-		var msgType = msg[0];
-		var sender = msg[1];
-		var senderClock = msg[2].asFloat;
-		"Player % check letency [%]".format(sender, (clock.beats.asFloat - senderClock)).postln;
+		OSCdef.newMatching(\msg_clockTempoSet, {|msg, time, addr, recvPort|
+			var msgType = msg[0];
+			var sender = msg[1];
+			var bpm = msg[2];
+			(bpm.asInteger != (currentEnvironment[\tempo].clock.tempo*60).asInteger).if({
+				"Kolektiv tempo change by % to % bpm".format(sender, bpm).warn;
+				currentEnvironment[\tempo].clock.tempo_(bpm/60);
+				History.enter("Kolektiv.tempo_(%);".format(bpm.asInteger), name.asSymbol);
+			});
 
-		events.clockTimeAnswer(sender, clock.beats);
-		}, '/clock/latency', nil).permanent_(true);
-
-		OSCdef.newMatching(\msg_clockLatencyAnswer, {|msg, time, addr, recvPort|
-		var msgType = msg[0];
-		var sender = msg[1];
-		var senderClock = msg[2].asFloat;
-		"Answer on latency check from % : %".format(sender, (clock.beats.asFloat - senderClock)).postln;
-
-		}, '/clock/latencyAnswer', nil).permanent_(true);
-		*/
+		}, '/clock/setTempo/set', nil).permanent_(true);
 
 		OSCdef.newMatching(\msg_kill, {|msg, time, addr, recvPort|
 			var msgType = msg[0];
@@ -262,15 +312,12 @@ Kolektiv {
 			if(code.asString.find("Kolektiv").isNil)
 			{
 				code = this.blockCode(code);
-				// this.putNodeToGroup;
+
 				"\n\nCodeExecute from %\n%".format(sender,  code).postln;
 				thisProcess.interpreter.interpret(code.asString);
 				History.enter(code.asString, sender.asSymbol);
 			};
 		}, '/code/execute', nil).permanent_(true);
-	}
-	putNodeToGroup{
-		Server.local.nextNodeID.postln;
 	}
 
 	blockCode {|code|
@@ -296,9 +343,14 @@ Kolektiv {
 		History.clear;
 		History.start;
 		History.forwardFunc = { |code|
-			History.enter(code.asString, name.asSymbol);
-			events.execute(code.asString);
+			(name.asSymbol != \listener).if({
+				History.enter(code.asString, name.asSymbol);
+				events.execute(code.asString);
+			},{
+				"You are log like Kolektiv(%) now. Log first by another name".format(name).warn;
+			});
 		};
+		(name != \listener).if({ History.enter("Kolektiv.tempo_(120);", name.asSymbol); });
 	}
 
 	initDocument { |isShared|
