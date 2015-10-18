@@ -60,7 +60,7 @@ Kolektiv {
 		(instance.name.asSymbol != \listener).if({
 			File.saveDialog (nil, nil,	{|selectedPath|
 				var dir;
-				var path = (selectedPath.dirname ++ "\/").standardizePath;
+				var path = (selectedPath.dirname ++ "/");
 				var file = "%_%".format(Date.localtime.dayStamp,selectedPath.basename);
 				var isFile = PathName.new(selectedPath).isFile;
 				var folderFiles = PathName.new(selectedPath.dirname.standardizePath).files;
@@ -73,8 +73,8 @@ Kolektiv {
 							((fileNameNoExtNoNum == file) or: (fileNameNoExtNoNum == ("%_".format(file)))).if({	index = index + 1; })
 						});
 						(index == 1).if(
-							{ dir = (path.dirname +/+ "%.%".format(file, "scd")).asString.standardizePath; },
-							{ dir = (path.dirname +/+ "%_%.%".format(file, index, "scd")).asString.standardizePath;	}
+							{ dir = (path +/+ "%.%".format(file, "scd")).asString.standardizePath; },
+							{ dir = (path +/+ "%_%.%".format(file, index, "scd")).asString.standardizePath;	}
 						);
 					}
 				);
