@@ -20,3 +20,7 @@ Put the class into Extensions directory of Supercollider and recompile libraries
 #deinitialization
 
     Kolektiv.free
+
+#some theory (in czech) only
+
+[SCKolektiv](https://github.com/K0F/martinText)
